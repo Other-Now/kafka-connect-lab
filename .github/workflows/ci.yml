@@ -1,0 +1,95 @@
+name: ci
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  KAFKA_VERSION: 4.1.2
+  KC_DB: jdbc:postgresql://localhost:5432/kc
+  KC_TEST_DB: jdbc:postgresql://localhost:5432/kc_test
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: kc
+          POSTGRES_PASSWORD: kc
+          POSTGRES_DB: kc
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U kc" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Create test database
+        run: PGPASSWORD=kc psql -h localhost -U kc -d kc -c "CREATE DATABASE kc_test"
+      - name: Unit + Postgres integration tests
+        run: mvn -B verify
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plugin
+          path: connectors/target/connectors-*-plugin.jar
+
+  chaos:
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: kc
+          POSTGRES_PASSWORD: kc
+          POSTGRES_DB: kc
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U kc" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+      - name: Cache Kafka distribution
+        uses: actions/cache@v4
+        with:
+          path: kafka_2.13-${{ env.KAFKA_VERSION }}
+          key: kafka-${{ env.KAFKA_VERSION }}
+      - name: Download Kafka
+        run: |
+          if [ ! -d kafka_2.13-$KAFKA_VERSION ]; then
+            curl -sSfL -o kafka.tgz https://archive.apache.org/dist/kafka/$KAFKA_VERSION/kafka_2.13-$KAFKA_VERSION.tgz
+            tar -xzf kafka.tgz
+          fi
+          echo "KAFKA_HOME=$PWD/kafka_2.13-$KAFKA_VERSION" >> $GITHUB_ENV
+      - name: Prometheus JMX exporter
+        run: |
+          curl -sSfL -o jmx_prometheus_javaagent.jar https://repo1.maven.org/maven2/io/prometheus/jmx/jmx_prometheus_javaagent/1.0.1/jmx_prometheus_javaagent-1.0.1.jar
+          echo "KC_JMX_AGENT=$PWD/jmx_prometheus_javaagent.jar" >> $GITHUB_ENV
+      - name: Build
+        run: mvn -B -q package -DskipTests
+      - name: Chaos matrix (kill -9 workers, kill DB sessions, cut WebSockets, inject garbage)
+        run: java -jar harness/target/harness.jar chaos --duration 150 --label matrix --out results/ci
+      - name: Throughput bench
+        run: java -jar harness/target/harness.jar bench --out results/ci
+      - name: Job summary
+        if: always()
+        run: |
+          { echo "## Chaos matrix"; cat results/ci/chaos-matrix.md 2>/dev/null; echo; echo "## Bench"; cat results/ci/bench.md 2>/dev/null; } >> $GITHUB_STEP_SUMMARY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: results-ci
+          path: |
+            results/ci
+            work/*/worker-*.out

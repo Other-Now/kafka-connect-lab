@@ -1,0 +1,14 @@
+{
+  "name": "binance-trades",
+  "config": {
+    "connector.class": "kclab.source.TradeSourceConnector",
+    "tasks.max": "2",
+    "symbols": "BTCUSDT,ETHUSDT,SOLUSDT,BNBUSDT",
+    "topic": "trades",
+    "rest.url": "https://data-api.binance.vision",
+    "ws.url": "wss://data-stream.binance.vision",
+    "start.from": "latest",
+    "exactly.once.support": "required",
+    "transaction.boundary": "poll"
+  }
+}

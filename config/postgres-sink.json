@@ -1,0 +1,16 @@
+{
+  "name": "trades-postgres",
+  "config": {
+    "connector.class": "kclab.sink.PgSinkConnector",
+    "tasks.max": "2",
+    "topics": "trades",
+    "connection.url": "jdbc:postgresql://localhost:5432/kc",
+    "connection.user": "kc",
+    "connection.password": "kc",
+    "table": "trades",
+    "write.mode": "offsets",
+    "errors.tolerance": "all",
+    "errors.deadletterqueue.topic.name": "trades-dlq",
+    "errors.deadletterqueue.context.headers.enable": "true"
+  }
+}
