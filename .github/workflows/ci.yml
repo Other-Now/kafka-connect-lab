@@ -42,7 +42,18 @@ jobs:
   chaos:
     needs: test
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - run: chaos alos-unsafe
+          - run: chaos alos-offsets
+          - run: chaos alos-upsert
+          - run: chaos eos-offsets
+          - run: chaos eos-offsets-uncommitted
+          - run: bench
+    name: ${{ matrix.run }}
     services:
       postgres:
         image: postgres:16
@@ -67,8 +78,10 @@ jobs:
           key: kafka-${{ env.KAFKA_VERSION }}
       - name: Download Kafka
         run: |
+          # archive.apache.org is heavily throttled (one run spent 49 minutes here); try the CDN first.
           if [ ! -d kafka_2.13-$KAFKA_VERSION ]; then
-            curl -sSfL -o kafka.tgz https://archive.apache.org/dist/kafka/$KAFKA_VERSION/kafka_2.13-$KAFKA_VERSION.tgz
+            f=kafka_2.13-$KAFKA_VERSION.tgz
+            curl -sSfL --max-time 300 -o kafka.tgz https://dlcdn.apache.org/kafka/$KAFKA_VERSION/$f               || curl -sSfL -o kafka.tgz https://archive.apache.org/dist/kafka/$KAFKA_VERSION/$f
             tar -xzf kafka.tgz
           fi
           echo "KAFKA_HOME=$PWD/kafka_2.13-$KAFKA_VERSION" >> $GITHUB_ENV
@@ -78,18 +91,15 @@ jobs:
           echo "KC_JMX_AGENT=$PWD/jmx_prometheus_javaagent.jar" >> $GITHUB_ENV
       - name: Build
         run: mvn -B -q package -DskipTests
-      - name: Chaos matrix (kill -9 workers, kill DB sessions, cut WebSockets, inject garbage)
-        run: java -jar harness/target/harness.jar chaos --duration 150 --label matrix --out results/ci
-      - name: Throughput bench
-        run: java -jar harness/target/harness.jar bench --out results/ci
+      - name: ${{ matrix.run }}
+        run: java -jar harness/target/harness.jar ${{ matrix.run }} --duration 150 --out results/ci
       - name: Job summary
         if: always()
-        run: |
-          { echo "## Chaos matrix"; cat results/ci/chaos-matrix.md 2>/dev/null; echo; echo "## Bench"; cat results/ci/bench.md 2>/dev/null; } >> $GITHUB_STEP_SUMMARY
+        run: cat results/ci/*.md >> $GITHUB_STEP_SUMMARY 2>/dev/null || true
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: results-ci
+          name: results-${{ strategy.job-index }}
           path: |
             results/ci
             work/*/worker-*.out
