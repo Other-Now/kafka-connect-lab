@@ -14,7 +14,7 @@ processes and accounts for every record afterwards.
   Postgres sessions, cuts WebSockets and drops frames, and injects garbage bytes into the topic. Then it checks
   the table, the topic and the DLQ against ground truth.
 
-~2,700 lines of Java 21 (connectors ~1,300, harness ~1,350) plus ~440 lines of tests: 18 tests, 4 of them against a real Postgres. Plain Kafka 4.1.2, no Confluent components.
+~2,700 lines of Java 21 (connectors ~1,300, harness ~1,350) plus ~440 lines of tests: 19 tests, 5 of them against a real Postgres. Plain Kafka 4.1.2, no Confluent components.
 
 ```
  Binance / mock venue                     Kafka (KRaft)                            PostgreSQL
@@ -146,6 +146,10 @@ All raw results are in [results/](results/), local and CI.
   waiting until CI cancelled it at 30 minutes. Two fixes: benchmark workers get 1 GB (Kafka's own script defaults
   to 2 GB), and the harness now fails fast with the task's trace instead of waiting on a FAILED task.
   Alerting on task state is part of running Connect.
+* **`CREATE TABLE IF NOT EXISTS` is not concurrency-safe.** Four sink tasks starting together on a fresh CI
+  database raced in the catalog and one task FAILED. Locally the race reproduces as SQLState 23505 on
+  `pg_type_typname_nsp_index`, 3 runs out of 3. The fix is DDL behind `pg_advisory_xact_lock`. The regression test
+  starts 8 tasks behind a barrier; it fails every time without the lock and passes with it.
 * **KRaft leaves snapshot `.checkpoint` files read-only.** Windows refuses to delete read-only files, so the second
   scenario's cleanup failed with `AccessDeniedException`.
 * **The harness JVM never exited.** The mock venue's `HttpServer` executor threads are non-daemon.

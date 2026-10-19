@@ -155,5 +155,7 @@ or when you need to know exactly what was applied.
 * **Throughput (laptop, relative only):**
   * EOS source costs **−29%** (18.1k → 12.8k rec/s).
   * The `offsets` sink costs −28% vs plain insert (15.6k → 11.2k rows/s).
+* **Story 2:** `CREATE TABLE IF NOT EXISTS` from 4 tasks at once collides in the catalog (23505 on `pg_type`).
+  Fixed with a transaction-scoped advisory lock; the regression test fails 3 out of 3 without it.
 * **Story:** a worker OOM at 384 MB made a task FAILED, and Connect never restarts a FAILED task, so the benchmark
   hung. The fix is a bigger heap plus fail-fast on task state. Monitoring task state is an operator duty.

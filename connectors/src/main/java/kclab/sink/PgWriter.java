@@ -57,6 +57,10 @@ final class PgWriter implements AutoCloseable {
         // so a duplicate delivery shows up as a duplicate row that the harness can count.
         String key = mode == PgSinkConfig.Mode.UPSERT ? ", PRIMARY KEY (symbol, agg_id)" : "";
         try (Statement s = conn().createStatement()) {
+            // CREATE TABLE IF NOT EXISTS is not safe under concurrency: tasks starting together can both
+            // pass the existence check and collide in the catalog. One transaction-scoped advisory lock
+            // makes the tasks take turns.
+            s.execute("SELECT pg_advisory_xact_lock(hashtext('kclab-sink-ddl'))");
             s.execute("CREATE TABLE IF NOT EXISTS " + table + " ("
                     + "symbol text NOT NULL, agg_id bigint NOT NULL, price numeric NOT NULL, qty numeric NOT NULL, "
                     + "first_trade_id bigint NOT NULL, last_trade_id bigint NOT NULL, trade_time timestamptz NOT NULL, "
@@ -67,8 +71,7 @@ final class PgWriter implements AutoCloseable {
             conn.commit();
         } catch (SQLException e) {
             rollbackQuietly();
-            // Two tasks racing CREATE TABLE IF NOT EXISTS can collide on the catalog; the loser retries.
-            if (!"23505".equals(e.getSQLState()) && !"42P07".equals(e.getSQLState())) throw e;
+            throw e;
         }
     }
 

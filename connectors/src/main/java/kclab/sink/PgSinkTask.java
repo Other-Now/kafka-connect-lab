@@ -161,7 +161,7 @@ public class PgSinkTask extends SinkTask {
                 return op.run();
             } catch (SQLException e) {
                 writer.reset();
-                if (!PgWriter.isTransient(e) || attempt >= maxRetries) throw new ConnectException(what + " failed", e);
+                if (!PgWriter.isTransient(e) || attempt >= maxRetries) throw new ConnectException(what + " failed: SQLState " + e.getSQLState() + ": " + e.getMessage(), e);
                 metrics.add("db-retries", 1);
                 sleep(backoff.delayMs(attempt));
             }

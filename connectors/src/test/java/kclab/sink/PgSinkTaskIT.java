@@ -55,11 +55,13 @@ class PgSinkTaskIT {
         }
     }
 
-    PgSinkTask task(Ctx ctx, String mode, String table) {
+    PgSinkTask task(Ctx ctx, String mode, String table) { return task(ctx, mode, table, "0"); }
+
+    PgSinkTask task(Ctx ctx, String mode, String table, String taskId) {
         PgSinkTask t = new PgSinkTask();
         t.initialize(ctx);
         t.start(Map.of("name", "it-" + mode, "connection.url", URL, "connection.user", USER,
-                "connection.password", PASS, "table", table, "write.mode", mode));
+                "connection.password", PASS, "table", table, "write.mode", mode, PgSinkConnector.TASK_ID, taskId));
         return t;
     }
 
@@ -125,6 +127,28 @@ class PgSinkTaskIT {
         x.put(batch(25, 50));
         x.stop();
         assertEquals(100, q("SELECT count(*) FROM it_unsafe_tbl"), "control: 25 duplicate rows");
+    }
+
+    @Test
+    void manyTasksStartingTogetherOnAFreshTableAllSucceed() throws Exception {
+        // Regression: 4 sink tasks racing CREATE TABLE IF NOT EXISTS failed one task in CI.
+        try (Connection c = DriverManager.getConnection(URL, USER, PASS); Statement s = c.createStatement()) {
+            s.execute("DROP TABLE IF EXISTS it_race_tbl");
+        }
+        int n = 8;
+        java.util.concurrent.CyclicBarrier go = new java.util.concurrent.CyclicBarrier(n);
+        List<CompletableFuture<PgSinkTask>> starts = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            String id = Integer.toString(i);
+            starts.add(CompletableFuture.supplyAsync(() -> {
+                try { go.await(); } catch (Exception e) { throw new IllegalStateException(e); }
+                return task(new Ctx(), "upsert", "it_race_tbl", id);
+            }));
+        }
+        for (CompletableFuture<PgSinkTask> f : starts) f.get().stop();
+        try (Connection c = DriverManager.getConnection(URL, USER, PASS); Statement s = c.createStatement()) {
+            s.execute("DROP TABLE IF EXISTS it_race_tbl");
+        }
     }
 
     @Test
