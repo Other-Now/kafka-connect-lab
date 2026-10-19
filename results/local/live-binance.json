@@ -1,0 +1,13 @@
+{
+  "duration_s": 600,
+  "worker_kills": 6,
+  "rows": 10080,
+  "missing_ids": 0,
+  "duplicate_rows": 0,
+  "BNBUSDT": "ids 866771585..866773704, rows 2120, missing 0, dups 0",
+  "BTCUSDT": "ids 4093118682..4093121982, rows 3301, missing 0, dups 0",
+  "ETHUSDT": "ids 2103725462..2103728583, rows 3122, missing 0, dups 0",
+  "SOLUSDT": "ids 679053711..679054454, rows 744, missing 0, dups 0",
+  "XRPUSDT": "ids 730305122..730305914, rows 793, missing 0, dups 0",
+  "rest_crosscheck": "BTCUSDT: 1000 of 1000 REST trades match the table exactly (price/qty)"
+}

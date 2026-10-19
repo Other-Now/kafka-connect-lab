@@ -1,0 +1,25 @@
+# worker 0
+
+# worker 1
+kclab_source_task_backfill_records{connector="live-source",task="0"} 96.0
+kclab_source_task_backfill_records{connector="live-source",task="1"} 117.0
+kclab_source_task_backfill_requests{connector="live-source",task="0"} 66.0
+kclab_source_task_backfill_requests{connector="live-source",task="1"} 43.0
+kclab_source_task_gaps_detected{connector="live-source",task="0"} 0.0
+kclab_source_task_gaps_detected{connector="live-source",task="1"} 0.0
+kclab_source_task_last_trade_lag_ms{connector="live-source",task="0"} 1020.0
+kclab_source_task_last_trade_lag_ms{connector="live-source",task="1"} 893.0
+kclab_source_task_live_duplicates{connector="live-source",task="0"} 25.0
+kclab_source_task_live_duplicates{connector="live-source",task="1"} 34.0
+kclab_source_task_live_received{connector="live-source",task="0"} 2082.0
+kclab_source_task_live_received{connector="live-source",task="1"} 2044.0
+kclab_source_task_records_emitted{connector="live-source",task="0"} 2153.0
+kclab_source_task_records_emitted{connector="live-source",task="1"} 2127.0
+kclab_source_task_rest_errors{connector="live-source",task="0"} 0.0
+kclab_source_task_rest_errors{connector="live-source",task="1"} 0.0
+kclab_source_task_rest_id_skips{connector="live-source",task="0"} 0.0
+kclab_source_task_rest_id_skips{connector="live-source",task="1"} 0.0
+kclab_source_task_ws_dropped_queue_full{connector="live-source",task="0"} 0.0
+kclab_source_task_ws_dropped_queue_full{connector="live-source",task="1"} 0.0
+kclab_source_task_ws_reconnects{connector="live-source",task="0"} 0.0
+kclab_source_task_ws_reconnects{connector="live-source",task="1"} 0.0

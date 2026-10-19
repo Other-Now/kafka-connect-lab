@@ -136,3 +136,24 @@ or when you need to know exactly what was applied.
 * The local box is Windows, and "kill -9" there is `TerminateProcess`. CI runs the same matrix on Linux with SIGKILL.
 * Single broker (RF=1), so broker failure is not tested; only worker, DB-session and venue failures are.
 * The live Binance run is on this laptop only. US GitHub runners get HTTP 451 from Binance, so CI uses the mock venue.
+
+## 7. Numbers to quote (re-read the README before an interview)
+
+* **Chaos, per run:**
+  * Setup: 150 s, 3 workers, **12 kill -9s**, ~160–190k trades.
+  * Faults: DB sessions killed, WebSockets cut, ~300–390 frames dropped, 20 garbage records, poison every 1,000th.
+  * **0 missing in all 10 runs** (5 scenarios × CI + local).
+* **Exactly-once source + offsets-in-transaction, read_committed:** **0 duplicates** (CI 160,636 trades, local 193,432).
+* **Controls, CI:**
+  * `unsafe`: 2,106 sink-redelivery + 53,428 source duplicate rows.
+  * `offsets` alone: 0 sink-side, 53,084 source-side.
+  * `upsert`: 0 rows duplicated, even though the topic held 45,512 duplicates.
+* **The read_uncommitted trap:** the same EOS pipeline with a read_uncommitted sink consumer wrote **775 duplicate
+  rows** on CI (37 locally), all from aborted transactions.
+* **Live Binance:** 10 min, 5 symbols, 6 kill -9s, **10,080 trades, 0 missing ids, 0 duplicates**, and 1,000/1,000
+  rows match REST exactly.
+* **Throughput (laptop, relative only):**
+  * EOS source costs **−29%** (18.1k → 12.8k rec/s).
+  * The `offsets` sink costs −28% vs plain insert (15.6k → 11.2k rows/s).
+* **Story:** a worker OOM at 384 MB made a task FAILED, and Connect never restarts a FAILED task, so the benchmark
+  hung. The fix is a bigger heap plus fail-fast on task state. Monitoring task state is an operator duty.

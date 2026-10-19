@@ -38,6 +38,8 @@ public final class Cluster implements AutoCloseable {
     private final String java = Path.of(System.getProperty("java.home"), "bin", "java").toString();
     private Process broker;
     private final List<Worker> workers = new ArrayList<>();
+    /** Worker heap. Kafka's connect-distributed script defaults to 2G; chaos runs 3 workers on a laptop. */
+    String workerHeap = "384m";
 
     public final class Worker {
         final int index;
@@ -51,7 +53,7 @@ public final class Cluster implements AutoCloseable {
         public String url() { return "http://localhost:" + restPort(); }
 
         public void start() throws IOException {
-            List<String> cmd = new ArrayList<>(List.of(java, "-Xms128m", "-Xmx384m"));
+            List<String> cmd = new ArrayList<>(List.of(java, "-Xms128m", "-Xmx" + workerHeap));
             if (jmxAgent != null) {
                 cmd.add("-javaagent:" + jmxAgent + "=" + (JMX_EXPORTER_PORT_BASE + index) + ":" + work.resolve("jmx-exporter.yaml"));
             }

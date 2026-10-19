@@ -40,6 +40,8 @@ final class Bench {
                  Cluster cl = new Cluster(Path.of(a.str("kafka-home", System.getenv("KAFKA_HOME"))),
                          Path.of(a.str("work", "work")).resolve("bench-" + tag),
                          Path.of(a.str("plugin", "connectors/target/connectors-0.1.0-plugin.jar")), null)) {
+                // At 384m the worker OOM'd in the 4-task backfill, and the FAILED task was never restarted.
+                cl.workerHeap = a.str("worker-heap", "1g");
                 cl.startBroker();
                 cl.createTopic("trades", 4);
                 cl.createTopic("trades-dlq", 1);
@@ -49,7 +51,7 @@ final class Bench {
                 long t0 = System.nanoTime();
                 rest.putConfig("bench-source", Pipelines.source(symbols, "http://127.0.0.1:18900", "ws://127.0.0.1:18901",
                         "earliest", 4, eos));
-                long n = awaitTopic(total);
+                long n = awaitTopic(total, rest, "bench-source");
                 double s = (System.nanoTime() - t0) / 1e9;
                 rows.add(row("source backfill → Kafka", tag, "-", n, s));
                 System.out.printf("source %s: %d records in %.1f s = %.0f rec/s (%s)%n", tag, n, s, n / s, venue.stats());
@@ -64,7 +66,11 @@ final class Bench {
                     rest.putConfig("bench-sink-" + tag + "-" + mode, Pipelines.sink(db, user, pass, table, mode, 4));
                     long want = total - poisonTotal;
                     long got;
-                    while ((got = count(db, user, pass, table)) < want) Thread.sleep(200);
+                    long deadline = System.currentTimeMillis() + 600_000;
+                    while ((got = count(db, user, pass, table)) < want) {
+                        failIfNotRunning(rest, "bench-sink-" + tag + "-" + mode, deadline);
+                        Thread.sleep(200);
+                    }
                     s = (System.nanoTime() - t0) / 1e9;
                     rows.add(row("Kafka → Postgres", tag, mode, got, s));
                     System.out.printf("sink %s/%s: %d rows in %.1f s = %.0f rows/s%n", tag, mode, got, s, got / s);
@@ -92,7 +98,14 @@ final class Bench {
     }
 
     /** Count committed records until the topic holds {@code total}. */
-    static long awaitTopic(long total) {
+    /** A FAILED task never restarts by itself: fail the bench with its trace instead of waiting forever. */
+    static void failIfNotRunning(ConnectRest rest, String name, long deadline) throws Exception {
+        if (System.currentTimeMillis() > deadline) throw new IllegalStateException(name + ": timed out");
+        String st = rest.state(name);
+        if (st.contains("FAILED")) throw new IllegalStateException(name + ": " + st);
+    }
+
+    static long awaitTopic(long total, ConnectRest rest, String name) throws Exception {
         Map<String, Object> p = new HashMap<>();
         p.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, Cluster.bootstrap());
         p.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
@@ -105,7 +118,14 @@ final class Bench {
             for (int i = 0; i < 4; i++) tps.add(new TopicPartition("trades", i));
             c.assign(tps);
             c.seekToBeginning(tps);
-            while (n < total) n += c.poll(Duration.ofMillis(200)).count();
+            long deadline = System.currentTimeMillis() + 600_000, lastCheck = 0;
+            while (n < total) {
+                n += c.poll(Duration.ofMillis(200)).count();
+                if (System.currentTimeMillis() - lastCheck > 2000) {
+                    failIfNotRunning(rest, name, deadline);
+                    lastCheck = System.currentTimeMillis();
+                }
+            }
         }
         return n;
     }
