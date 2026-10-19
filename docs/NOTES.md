@@ -152,9 +152,10 @@ or when you need to know exactly what was applied.
   rows** on CI (37 locally), all from aborted transactions.
 * **Live Binance:** 10 min, 5 symbols, 6 kill -9s, **10,080 trades, 0 missing ids, 0 duplicates**, and 1,000/1,000
   rows match REST exactly.
-* **Throughput (laptop, relative only):**
-  * EOS source costs **−29%** (18.1k → 12.8k rec/s).
-  * The `offsets` sink costs −28% vs plain insert (15.6k → 11.2k rows/s).
+* **Throughput (1 worker, relative only):**
+  * CI Linux: source 48k rec/s at-least-once and 51.5k with EOS, so **no measurable EOS cost** with poll-sized
+    transactions. The laptop showed −29%, but it didn't reproduce; don't quote it.
+  * Sink on CI: unsafe 83.6k, `offsets` 71.5k (−14%), upsert 64.2k rows/s (−23%).
 * **Story 2:** `CREATE TABLE IF NOT EXISTS` from 4 tasks at once collides in the catalog (23505 on `pg_type`).
   Fixed with a transaction-scoped advisory lock; the regression test fails 3 out of 3 without it.
 * **Story:** a worker OOM at 384 MB made a task FAILED, and Connect never restarts a FAILED task, so the benchmark

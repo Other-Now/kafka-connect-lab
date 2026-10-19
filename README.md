@@ -123,19 +123,28 @@ path at work: 213 trades backfilled over REST after the last restart, and 59 liv
 sequencer. This is a quiet market (≈17 trades/s across the five symbols), and it ran on the laptop only, because
 GitHub's US runners get HTTP 451 from Binance.
 
-### Throughput (laptop, 1 worker, 4 tasks, 1M trades)
+### Throughput (1 worker, 4 tasks, 1M trades, no chaos)
 
-Broker, worker, Postgres and the venue all run on one 8-thread laptop, so these numbers are relative,
-not a capacity claim.
+Broker, worker, Postgres and the venue share one machine, so these are relative numbers, not a capacity claim.
 
-| stage | records/s |
-|---|---|
-| source, REST backfill → Kafka, at-least-once | 18,054 |
-| source, REST backfill → Kafka, **exactly-once** | 12,802 (−29%: a transaction commit per poll batch) |
-| sink `unsafe` | 15,576 |
-| sink `upsert` | 11,789 |
-| sink `offsets` | 11,213 (−28% vs unsafe: offset CAS in every transaction) |
-| sink `offsets`, reading the exactly-once topic | 9,781 |
+| stage | CI Linux, 4 vCPU (rec/s) | laptop, Windows (rec/s) |
+|---|---|---|
+| source, REST backfill → Kafka, at-least-once | 48,021 | 18,054 |
+| source, REST backfill → Kafka, exactly-once | 51,523 | 12,802 |
+| sink `unsafe` (plain insert) | 83,624 | 15,576 |
+| sink `upsert` | 64,227 | 11,789 |
+| sink `offsets` | 71,522 | 11,213 |
+| sink `offsets`, reading the exactly-once topic | 72,080 | 9,781 |
+
+* **Sink:** the safety costs show on both machines. `offsets` is −14% vs a plain insert on CI (−28% on the laptop),
+  because every transaction also does the offset compare-and-set. `upsert` is −23% on CI, the cost of the
+  primary-key check.
+* **Exactly-once source:** it cost −29% on the laptop but **nothing measurable on CI** (51.5k vs 48.0k). One commit
+  per poll batch (up to 5,000 records) is cheap when the broker's log flush is cheap. On the laptop the broker
+  shares a slow disk and CPU with everything else. So the honest claim is: with batch-sized transactions, EOS
+  overhead is small and can be lost in the noise.
+
+Raw numbers are in `results/local/bench.md` and the CI job summary (run 39247824873).
 
 All raw results are in [results/](results/), local and CI.
 
