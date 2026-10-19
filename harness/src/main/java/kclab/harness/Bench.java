@@ -60,6 +60,8 @@ final class Bench {
                     String table = "bench_" + tag + "_" + mode;
                     try (Connection c = DriverManager.getConnection(db, user, pass); Statement st = c.createStatement()) {
                         st.execute("DROP TABLE IF EXISTS " + table);
+                        st.execute("CREATE TABLE IF NOT EXISTS kc_sink_offsets (connector text NOT NULL, topic text NOT NULL, "
+                                + "kpartition int NOT NULL, next_offset bigint NOT NULL, PRIMARY KEY (connector, topic, kpartition))");
                         st.execute("DELETE FROM kc_sink_offsets WHERE connector = 'bench-sink-" + tag + "-" + mode + "'");
                     }
                     t0 = System.nanoTime();
